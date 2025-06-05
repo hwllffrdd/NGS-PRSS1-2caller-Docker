@@ -30,6 +30,10 @@ A complete Docker-based pipeline for PRSS1-PRSS2 genetic variant analysis, from 
    ```bash
    docker run -it --rm -v "/path/to/your/analysis:/data" prss1-pipeline bash run_complete_pipeline.sh
    ```
+   or
+   ```bash
+   docker run -it --rm -v "$(pwd):/data" prss1-pipeline bash run_complete_pipeline.sh
+   ```
 
 ## Input Structure
 
@@ -63,7 +67,7 @@ your-analysis-directory/
 docker build -t prss1-pipeline .
 
 # Run analysis on data in /home/user/my_prss_analysis/
-docker run -it --rm -v "/home/user/my_prss_analysis:/data" prss1-pipeline bash run_complete_pipeline.sh
+docker run -it --rm -v "$(pwd):/data" prss1-pipeline bash run_complete_pipeline.sh
 ```
 
 ## About
