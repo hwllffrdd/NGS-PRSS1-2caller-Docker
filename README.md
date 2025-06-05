@@ -1,13 +1,13 @@
 # NGS.PRSS1-2caller Docker Pipeline
 
-A complete Docker-based pipeline for PRSS1-PRSS2 genetic variant analysis, from FASTQ files to annotated variants with plots.
+A complete Docker-based pipeline for PRSS1-PRSS2 genetic variant analysis, from FASTQ files to annotated variants with a plot.
 
 ## Features
 
 - **Complete pipeline**: FASTQ → Alignment → Variant Calling → Annotation → Plotting
 - **Proper alignment**: Uses GRCh38+ALT contig to avoid pseudogene mapping issues
-- **Enhanced R plotting**: Includes variant position plots with R 4.0+
 - **SnpEff annotations**: Biological consequence annotations for all variants
+- **R plotting**: Includes variant position plots with R
 
 ## Requirements
 
@@ -72,7 +72,7 @@ docker run -it --rm -v "$(pwd):/data" prss1-pipeline bash run_complete_pipeline.
 
 ## About
 
-This pipeline implements the NGS.PRSS1-2caller tool in a complete Docker environment, adding FASTQ alignment capabilities and enhanced R plotting. It properly handles the complex PRSS1-PRSS2 locus with its pseudogenes to provide accurate variant calling for pancreatitis-related genetic analysis.
+This pipeline implements the NGS.PRSS1-2caller tool in a complete Docker environment, adding FASTQ alignment capabilities and enhanced R plotting. It properly handles the complex PRSS1-PRSS2 locus with its pseudogenes to provide accurate variant calling.
 
 ## Citation
 
