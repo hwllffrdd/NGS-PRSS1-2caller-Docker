@@ -445,14 +445,137 @@ echo "Running NGS.PRSS1-2caller..."
 bash NGS.PRSS1-2caller.sh -i /data/sample_list.txt -n "$ANALYSIS_NAME" -r "GRCh38" -m 50
 
 # =============================================================================
+# STEP 7: CHECK RESULTS AND MOVE TO DATA DIRECTORY
+# =============================================================================
+echo "=== STEP 7: CHECKING VARIANT CALLING RESULTS ==="
+
+# First, let's see what directories were actually created
+echo "Checking what directories exist in /opt/NGS.PRSS1-2caller/:"
+ls -la /opt/NGS.PRSS1-2caller/ | grep "^d"
+
+# Look for any directory that might contain our results
+ANALYSIS_NAME="prss1_analysis"
+RESULT_DIR=""
+
+# Check for common directory patterns
+for dir in "${ANALYSIS_NAME}.out" "${ANALYSIS_NAME}" "myPRSScall.out" "myPRSScall"; do
+    if [ -d "/opt/NGS.PRSS1-2caller/$dir" ]; then
+        RESULT_DIR="/opt/NGS.PRSS1-2caller/$dir"
+        echo "Found results directory: $RESULT_DIR"
+        break
+    fi
+done
+
+# If we still haven't found it, look for any new directory created after our script started
+if [ -z "$RESULT_DIR" ]; then
+    echo "Looking for recently created directories..."
+    NEWEST_DIR=$(find /opt/NGS.PRSS1-2caller/ -maxdepth 1 -type d -name "*PRSS*" -o -name "*analysis*" -o -name "*call*" | head -1)
+    if [ -n "$NEWEST_DIR" ] && [ -d "$NEWEST_DIR" ]; then
+        RESULT_DIR="$NEWEST_DIR"
+        echo "Found potential results directory: $RESULT_DIR"
+    fi
+fi
+
+if [ -n "$RESULT_DIR" ] && [ -d "$RESULT_DIR" ]; then
+    echo "Found results directory: $RESULT_DIR"
+    
+    # List contents to see what's there
+    echo "Directory contents:"
+    ls -la "$RESULT_DIR"
+    
+    cd "$RESULT_DIR"
+    
+    # Look for VCF files with any name pattern
+    VCF_FILES=$(find . -name "*.vcf" -type f)
+    if [ -n "$VCF_FILES" ]; then
+        echo "Found VCF files:"
+        echo "$VCF_FILES"
+        
+        # Use the first VCF file found
+        VCF_FILE=$(echo "$VCF_FILES" | head -1)
+        VARIANT_COUNT=$(grep -v "^#" "$VCF_FILE" | wc -l)
+        echo "Variant calling succeeded: $VARIANT_COUNT variants found in $VCF_FILE"
+        
+        # Move results to data directory
+        DEST_DIR="/data/$(basename $RESULT_DIR)"
+        mv "$RESULT_DIR" "$DEST_DIR"
+        echo "Results moved to: $DEST_DIR"
+        
+        # Update the path for Step 8
+        export RESULT_PATH="$DEST_DIR"
+    else
+        echo "❌ ERROR: No VCF files found in results directory!"
+        echo "Directory contents:"
+        ls -la "$RESULT_DIR"
+        exit 1
+    fi
+else
+    echo "❌ ERROR: No results directory found!"
+    echo "Available directories in /opt/NGS.PRSS1-2caller/:"
+    ls -la /opt/NGS.PRSS1-2caller/
+    exit 1
+fi
+
+# =============================================================================
+# STEP 8: ENHANCED SNPEFF ANNOTATION
+# =============================================================================
+echo "=== STEP 8: RUNNING ENHANCED SNPEFF ANNOTATION ==="
+
+cd "/data/${ANALYSIS_NAME}"
+
+INPUT_VCF="${ANALYSIS_NAME}_PRSS.vcf"
+OUTPUT_VCF="${ANALYSIS_NAME}_PRSS_snpEff_ann_ENHANCED.vcf"
+OUTPUT_TXT="${ANALYSIS_NAME}_PRSS_snpEff_ann_ENHANCED.txt"
+
+echo "Starting SnpEff annotation..."
+echo "Input VCF: $INPUT_VCF"
+echo "Output VCF: $OUTPUT_VCF"
+echo "Output TXT: $OUTPUT_TXT"
+
+if [ ! -f "$INPUT_VCF" ]; then
+    echo "ERROR: Input VCF file not found: $INPUT_VCF"
+    exit 1
+fi
+
+INPUT_VARIANTS=$(grep -v "^#" "$INPUT_VCF" | wc -l)
+echo "Input VCF contains $INPUT_VARIANTS variants"
+
+# Run SnpEff annotation using our properly configured database
+echo "Running SnpEff annotation..."
+java -Xmx4g -jar /opt/snpEff/snpEff.jar -v \
+    -c /opt/snpEff/snpEff.config \
+    -dataDir /opt/NGS.PRSS1-2caller/data \
+    GRCh38_ALT_PRSS \
+    "$INPUT_VCF" > "$OUTPUT_VCF" 2> snpeff.log
+
+if [ -f "$OUTPUT_VCF" ] && [ -s "$OUTPUT_VCF" ]; then
+    OUTPUT_VARIANTS=$(grep -v "^#" "$OUTPUT_VCF" | wc -l)
+    echo "SnpEff annotation succeeded: $OUTPUT_VARIANTS variants annotated"
+    
+    # Extract to text format
+    java -jar /opt/snpEff/SnpSift.jar extractFields \
+        "$OUTPUT_VCF" \
+        CHROM POS REF ALT "ANN[0].GENE" "ANN[0].FEATUREID" "ANN[0].EFFECT" "ANN[0].IMPACT" "ANN[0].HGVS_C" "ANN[0].HGVS_P" \
+        > "$OUTPUT_TXT"
+    
+    echo "Text output created: $OUTPUT_TXT"
+else
+    echo "❌ SnpEff annotation failed"
+    echo "SnpEff log:"
+    cat snpeff.log
+    exit 1
+fi
+
+# =============================================================================
 # FINAL RESULTS
 # =============================================================================
 echo "=== ANALYSIS COMPLETE ==="
-echo "Results are available in: /data/prss1_analysis/"
+echo "Results are available in: /data/${ANALYSIS_NAME}/"
 echo "Key files:"
 echo "  - Aligned BAM files: /data/bams/*.sorted.bam"
-echo "  - prss1_analysis_PRSS.vcf: Original variant calls"
-echo "  - prss1_analysis_PRSS_snpEff_ann.vcf: SnpEff annotations"
-echo "  - prss1_analysis_PRSS_snpEff_ann.txt: Annotation summary in text format"
-echo "  - prss1_analysis_PRSS_snpEff_ann.plot.pdf: Variant position plot"
+echo "  - ${ANALYSIS_NAME}_PRSS.vcf: Original variant calls"
+echo "  - ${OUTPUT_VCF}: Enhanced SnpEff annotations"
+echo "  - ${OUTPUT_TXT}: Annotation summary in text format"
+echo "  - ${ANALYSIS_NAME}_PRSS_snpEff_ann.plot.pdf: Variant position plot"
+
 echo "Complete pipeline completed successfully at: $(date)"
